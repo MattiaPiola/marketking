@@ -1,0 +1,343 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>MarketKing</title>
+    <style>
+      :root {
+        color-scheme: light;
+        font-family: Arial, Helvetica, sans-serif;
+      }
+      body {
+        margin: 0;
+        background: #f5f7fb;
+        color: #1a1f36;
+      }
+      main {
+        max-width: 900px;
+        margin: 24px auto;
+        padding: 0 16px;
+      }
+      .card {
+        background: #fff;
+        border-radius: 10px;
+        box-shadow: 0 4px 16px rgba(29, 41, 67, 0.08);
+        padding: 16px;
+        margin-bottom: 16px;
+      }
+      h1, h2 {
+        margin-top: 0;
+      }
+      .row {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+        gap: 10px;
+        margin-bottom: 10px;
+      }
+      label {
+        display: block;
+        font-size: 0.9rem;
+        margin-bottom: 4px;
+      }
+      input {
+        width: 100%;
+        box-sizing: border-box;
+        padding: 8px;
+        border-radius: 6px;
+        border: 1px solid #b8c0d9;
+      }
+      button {
+        background: #2e63ff;
+        color: white;
+        border: 0;
+        border-radius: 6px;
+        padding: 10px 14px;
+        cursor: pointer;
+      }
+      button:hover {
+        background: #214edf;
+      }
+      .muted {
+        color: #5b637a;
+      }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-top: 10px;
+      }
+      th,
+      td {
+        border-bottom: 1px solid #e3e7f3;
+        padding: 8px;
+        text-align: left;
+      }
+      .hidden {
+        display: none;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <section class="card">
+        <h1>MarketKing</h1>
+        <p class="muted">
+          A classroom multiplayer market-share game: set your price, quality, and
+          marketing each round to win the biggest profitable slice of the market.
+        </p>
+      </section>
+
+      <section id="setup" class="card">
+        <h2>Game setup</h2>
+        <div class="row">
+          <div>
+            <label for="players">Brands (players)</label>
+            <input id="players" type="number" min="2" max="6" value="3" />
+          </div>
+          <div>
+            <label for="rounds">Rounds</label>
+            <input id="rounds" type="number" min="3" max="20" value="6" />
+          </div>
+        </div>
+        <button id="start">Start game</button>
+      </section>
+
+      <section id="game" class="card hidden">
+        <h2 id="turn-title"></h2>
+        <p id="round-info" class="muted"></p>
+        <div class="row">
+          <div>
+            <label for="price">Price (5-30)</label>
+            <input id="price" type="number" min="5" max="30" value="15" />
+          </div>
+          <div>
+            <label for="quality">Quality (1-10)</label>
+            <input id="quality" type="number" min="1" max="10" value="5" />
+          </div>
+          <div>
+            <label for="marketing">Marketing (0-100)</label>
+            <input id="marketing" type="number" min="0" max="100" value="20" />
+          </div>
+        </div>
+        <button id="submit">Submit decision</button>
+        <p id="tip" class="muted">
+          Hint: lower prices can increase demand, but if prices are too low your
+          profit per unit shrinks.
+        </p>
+      </section>
+
+      <section id="results" class="card hidden">
+        <h2>Round results</h2>
+        <div id="results-table"></div>
+      </section>
+
+      <section id="final" class="card hidden">
+        <h2>Final ranking</h2>
+        <div id="final-table"></div>
+      </section>
+    </main>
+
+    <script>
+      const setupSection = document.getElementById("setup");
+      const gameSection = document.getElementById("game");
+      const resultsSection = document.getElementById("results");
+      const finalSection = document.getElementById("final");
+
+      const playersInput = document.getElementById("players");
+      const roundsInput = document.getElementById("rounds");
+      const startButton = document.getElementById("start");
+      const submitButton = document.getElementById("submit");
+
+      const turnTitle = document.getElementById("turn-title");
+      const roundInfo = document.getElementById("round-info");
+
+      const priceInput = document.getElementById("price");
+      const qualityInput = document.getElementById("quality");
+      const marketingInput = document.getElementById("marketing");
+
+      const resultsTable = document.getElementById("results-table");
+      const finalTable = document.getElementById("final-table");
+
+      let state = null;
+
+      function clamp(value, min, max) {
+        return Math.min(max, Math.max(min, value));
+      }
+
+      function startGame() {
+        const players = clamp(Number(playersInput.value) || 3, 2, 6);
+        const rounds = clamp(Number(roundsInput.value) || 6, 3, 20);
+        playersInput.value = players;
+        roundsInput.value = rounds;
+
+        state = {
+          totalRounds: rounds,
+          currentRound: 1,
+          currentPlayer: 0,
+          brands: Array.from({ length: players }, (_, i) => ({
+            name: `Brand ${i + 1}`,
+            cash: 5000,
+            totalShare: 0,
+            last: null
+          })),
+          choices: []
+        };
+
+        setupSection.classList.add("hidden");
+        gameSection.classList.remove("hidden");
+        resultsSection.classList.add("hidden");
+        finalSection.classList.add("hidden");
+        updateTurnText();
+      }
+
+      function updateTurnText() {
+        const brand = state.brands[state.currentPlayer];
+        turnTitle.textContent = `${brand.name}: make your decision`;
+        roundInfo.textContent = `Round ${state.currentRound} of ${state.totalRounds}`;
+      }
+
+      function submitChoice() {
+        const price = clamp(Number(priceInput.value) || 15, 5, 30);
+        const quality = clamp(Number(qualityInput.value) || 5, 1, 10);
+        const marketing = clamp(Number(marketingInput.value) || 20, 0, 100);
+
+        priceInput.value = price;
+        qualityInput.value = quality;
+        marketingInput.value = marketing;
+
+        state.choices[state.currentPlayer] = { price, quality, marketing };
+
+        if (state.currentPlayer < state.brands.length - 1) {
+          state.currentPlayer += 1;
+          updateTurnText();
+          return;
+        }
+
+        resolveRound();
+      }
+
+      function resolveRound() {
+        const avgPrice =
+          state.choices.reduce((sum, c) => sum + c.price, 0) / state.choices.length;
+        const demandMultiplier = clamp(1.1 - (avgPrice - 15) * 0.03, 0.5, 1.4);
+        const totalDemand = 1000 * demandMultiplier;
+
+        const attractiveness = state.choices.map((c) => {
+          const priceEffect = Math.max(0, 35 - c.price);
+          return c.quality * 8 + c.marketing * 0.3 + priceEffect * 1.2;
+        });
+        const totalAttractiveness = attractiveness.reduce((a, b) => a + b, 0) || 1;
+
+        const roundResults = state.brands.map((brand, index) => {
+          const choice = state.choices[index];
+          const share = attractiveness[index] / totalAttractiveness;
+          const units = totalDemand * share;
+          const unitCost = 4 + choice.quality * 0.8 + choice.marketing * 0.02;
+          const profit = units * (choice.price - unitCost) - choice.marketing * 5;
+
+          brand.cash += profit;
+          brand.totalShare += share;
+          brand.last = {
+            ...choice,
+            share,
+            units,
+            profit
+          };
+
+          return {
+            name: brand.name,
+            price: choice.price,
+            quality: choice.quality,
+            marketing: choice.marketing,
+            share,
+            profit,
+            cash: brand.cash
+          };
+        });
+
+        renderRoundResults(roundResults);
+        state.currentRound += 1;
+
+        if (state.currentRound > state.totalRounds) {
+          endGame();
+          return;
+        }
+
+        state.currentPlayer = 0;
+        state.choices = [];
+        updateTurnText();
+      }
+
+      function renderRoundResults(rows) {
+        resultsSection.classList.remove("hidden");
+        resultsTable.innerHTML = `
+          <table>
+            <thead>
+              <tr>
+                <th>Brand</th>
+                <th>Price</th>
+                <th>Quality</th>
+                <th>Marketing</th>
+                <th>Market Share</th>
+                <th>Round Profit</th>
+                <th>Total Cash</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${rows
+                .map(
+                  (row) => `
+                <tr>
+                  <td>${row.name}</td>
+                  <td>${row.price.toFixed(0)}</td>
+                  <td>${row.quality.toFixed(0)}</td>
+                  <td>${row.marketing.toFixed(0)}</td>
+                  <td>${(row.share * 100).toFixed(1)}%</td>
+                  <td>${row.profit.toFixed(0)}</td>
+                  <td>${row.cash.toFixed(0)}</td>
+                </tr>`
+                )
+                .join("")}
+            </tbody>
+          </table>
+        `;
+      }
+
+      function endGame() {
+        gameSection.classList.add("hidden");
+        finalSection.classList.remove("hidden");
+
+        const ranking = [...state.brands].sort((a, b) => b.cash - a.cash);
+
+        finalTable.innerHTML = `
+          <table>
+            <thead>
+              <tr>
+                <th>Rank</th>
+                <th>Brand</th>
+                <th>Final Cash</th>
+                <th>Average Share</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${ranking
+                .map(
+                  (brand, index) => `
+                <tr>
+                  <td>${index + 1}</td>
+                  <td>${brand.name}</td>
+                  <td>${brand.cash.toFixed(0)}</td>
+                  <td>${((brand.totalShare / state.totalRounds) * 100).toFixed(1)}%</td>
+                </tr>`
+                )
+                .join("")}
+            </tbody>
+          </table>
+        `;
+      }
+
+      startButton.addEventListener("click", startGame);
+      submitButton.addEventListener("click", submitChoice);
+    </script>
+  </body>
+</html>
