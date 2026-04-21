@@ -125,8 +125,9 @@
         </div>
         <button id="submit">Submit decision</button>
         <p id="tip" class="muted">
-          Hint: lower prices can increase demand, but if prices are too low your
-          profit per unit shrinks.
+          Hint: higher quality attracts more customers, but production costs rise
+          steeply — quality 10 can easily make each unit unprofitable at a low
+          price. Check the Unit Cost column after each round to see the effect.
         </p>
       </section>
 
@@ -175,7 +176,7 @@
         marketingWeight: 0.3,
         priceWeight: 1.2,
         baseUnitCost: 4,
-        qualityUnitCostWeight: 0.8,
+        qualityUnitCostWeight: 0.4,
         marketingUnitCostWeight: 0.02,
         marketingFixedCostWeight: 5,
         initialBrandCash: 5000
@@ -276,7 +277,7 @@
           const units = totalDemand * share;
           const unitCost =
             ECONOMY.baseUnitCost +
-            choice.quality * ECONOMY.qualityUnitCostWeight +
+            Math.pow(choice.quality, 1.5) * ECONOMY.qualityUnitCostWeight +
             choice.marketing * ECONOMY.marketingUnitCostWeight;
           const profit =
             units * (choice.price - unitCost) -
@@ -296,6 +297,7 @@
             price: choice.price,
             quality: choice.quality,
             marketing: choice.marketing,
+            unitCost,
             share,
             profit,
             cash: brand.cash
@@ -326,6 +328,7 @@
                 <th>Price</th>
                 <th>Quality</th>
                 <th>Marketing</th>
+                <th>Unit Cost</th>
                 <th>Market Share</th>
                 <th>Round Profit</th>
                 <th>Total Cash</th>
@@ -340,6 +343,7 @@
                   <td>${row.price.toFixed(0)}</td>
                   <td>${row.quality.toFixed(0)}</td>
                   <td>${row.marketing.toFixed(0)}</td>
+                  <td>${row.unitCost.toFixed(2)}</td>
                   <td>${(row.share * 100).toFixed(1)}%</td>
                   <td>${row.profit.toFixed(0)}</td>
                   <td>${row.cash.toFixed(0)}</td>
