@@ -15,7 +15,7 @@ Each round uses a clear classical-economics style model:
 
 ## Run
 
-Open `/home/runner/work/marketking/marketking/index.html` in a browser.
+Open `index.html` in a browser (or deploy the repository to Netlify and open the site URL).
 
 ## Netlify hosting and external services
 

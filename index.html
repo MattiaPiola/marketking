@@ -3,7 +3,11 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>MarketKing</title>
+    <meta
+      name="description"
+      content="MarketKing is a simple multiplayer economics classroom game where players compete for profitable market share."
+    />
+    <title>MarketKing - Multiplayer Economics Game</title>
     <style>
       :root {
         color-scheme: light;
@@ -59,7 +63,7 @@
         background: #214edf;
       }
       .muted {
-        color: #5b637a;
+        color: #3f4660;
       }
       table {
         width: 100%;
@@ -159,6 +163,23 @@
       const finalTable = document.getElementById("final-table");
 
       let state = null;
+      const ECONOMY = {
+        referencePrice: 15,
+        demandBase: 1.1,
+        priceDemandSensitivity: 0.03,
+        minDemandMultiplier: 0.5,
+        maxDemandMultiplier: 1.4,
+        baseMarketDemand: 1000,
+        priceAttractivenessCap: 35,
+        qualityWeight: 8,
+        marketingWeight: 0.3,
+        priceWeight: 1.2,
+        baseUnitCost: 4,
+        qualityUnitCostWeight: 0.8,
+        marketingUnitCostWeight: 0.02,
+        marketingFixedCostWeight: 5,
+        initialBrandCash: 5000
+      };
 
       function clamp(value, min, max) {
         return Math.min(max, Math.max(min, value));
@@ -173,14 +194,15 @@
         state = {
           totalRounds: rounds,
           currentRound: 1,
+          completedRounds: 0,
           currentPlayer: 0,
           brands: Array.from({ length: players }, (_, i) => ({
             name: `Brand ${i + 1}`,
-            cash: 5000,
+            cash: ECONOMY.initialBrandCash,
             totalShare: 0,
             last: null
           })),
-          choices: []
+          choices: Array(players).fill(null)
         };
 
         setupSection.classList.add("hidden");
@@ -217,23 +239,48 @@
       }
 
       function resolveRound() {
+        if (
+          state.choices.length !== state.brands.length ||
+          state.choices.some((choice) => !choice)
+        ) {
+          return;
+        }
+
         const avgPrice =
           state.choices.reduce((sum, c) => sum + c.price, 0) / state.choices.length;
-        const demandMultiplier = clamp(1.1 - (avgPrice - 15) * 0.03, 0.5, 1.4);
-        const totalDemand = 1000 * demandMultiplier;
+        const demandMultiplier = clamp(
+          ECONOMY.demandBase -
+            (avgPrice - ECONOMY.referencePrice) * ECONOMY.priceDemandSensitivity,
+          ECONOMY.minDemandMultiplier,
+          ECONOMY.maxDemandMultiplier
+        );
+        const totalDemand = ECONOMY.baseMarketDemand * demandMultiplier;
 
         const attractiveness = state.choices.map((c) => {
-          const priceEffect = Math.max(0, 35 - c.price);
-          return c.quality * 8 + c.marketing * 0.3 + priceEffect * 1.2;
+          const priceEffect = Math.max(0, ECONOMY.priceAttractivenessCap - c.price);
+          return (
+            c.quality * ECONOMY.qualityWeight +
+            c.marketing * ECONOMY.marketingWeight +
+            priceEffect * ECONOMY.priceWeight
+          );
         });
-        const totalAttractiveness = attractiveness.reduce((a, b) => a + b, 0) || 1;
+        const totalAttractiveness = attractiveness.reduce((a, b) => a + b, 0);
+        const equalShare = 1 / state.brands.length;
 
         const roundResults = state.brands.map((brand, index) => {
           const choice = state.choices[index];
-          const share = attractiveness[index] / totalAttractiveness;
+          const share =
+            totalAttractiveness > 0
+              ? attractiveness[index] / totalAttractiveness
+              : equalShare;
           const units = totalDemand * share;
-          const unitCost = 4 + choice.quality * 0.8 + choice.marketing * 0.02;
-          const profit = units * (choice.price - unitCost) - choice.marketing * 5;
+          const unitCost =
+            ECONOMY.baseUnitCost +
+            choice.quality * ECONOMY.qualityUnitCostWeight +
+            choice.marketing * ECONOMY.marketingUnitCostWeight;
+          const profit =
+            units * (choice.price - unitCost) -
+            choice.marketing * ECONOMY.marketingFixedCostWeight;
 
           brand.cash += profit;
           brand.totalShare += share;
@@ -256,6 +303,7 @@
         });
 
         renderRoundResults(roundResults);
+        state.completedRounds += 1;
         state.currentRound += 1;
 
         if (state.currentRound > state.totalRounds) {
@@ -264,7 +312,7 @@
         }
 
         state.currentPlayer = 0;
-        state.choices = [];
+        state.choices = Array(state.brands.length).fill(null);
         updateTurnText();
       }
 
@@ -327,7 +375,11 @@
                   <td>${index + 1}</td>
                   <td>${brand.name}</td>
                   <td>${brand.cash.toFixed(0)}</td>
-                  <td>${((brand.totalShare / state.totalRounds) * 100).toFixed(1)}%</td>
+                  <td>${(
+                    (state.completedRounds
+                      ? brand.totalShare / state.completedRounds
+                      : 0) * 100
+                  ).toFixed(1)}%</td>
                 </tr>`
                 )
                 .join("")}
