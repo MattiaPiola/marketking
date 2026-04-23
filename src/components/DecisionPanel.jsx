@@ -265,8 +265,8 @@ function CatalogSection({
   const canAddMore = products.length < catalogMax - 1
   const turnUnlocked = currentTurn >= unlockTurn
   const canAfford = budget >= launchCost
-  const newTypeLaunched = products.some(p => !prevLaunchedTypes.includes(p.product_type))
-  const canAdd = canAddMore && turnUnlocked && (canAfford || newTypeLaunched === false) && !disabled
+  const allTypesAlreadyLaunched = products.every(p => prevLaunchedTypes.includes(p.product_type))
+  const canAdd = canAddMore && turnUnlocked && (canAfford || allTypesAlreadyLaunched) && !disabled
 
   // Types already in the catalog (including those being added this turn)
   const usedTypes = products.map(p => p.product_type)

@@ -327,7 +327,7 @@ export default function AdminPage() {
       .eq('room_id', roomId)
       .eq('turn', room.current_turn)
       .then(({ data }) => setDecisions(data ?? []))
-  }, [roomId, room])
+  }, [roomId, room?.current_turn, room?.status, room?.turn_phase, room])
 
   // ── Fetch results for results phase ──────────────────────────────────────
   useEffect(() => {
@@ -338,7 +338,7 @@ export default function AdminPage() {
       .eq('room_id', roomId)
       .eq('turn', room.current_turn)
       .then(({ data }) => setResults(data ?? []))
-  }, [roomId, room])
+  }, [roomId, room?.current_turn, room?.turn_phase, room])
 
   // ── Fetch active shocks ───────────────────────────────────────────────────
   useEffect(() => {

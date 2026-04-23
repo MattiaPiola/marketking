@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -113,12 +113,9 @@ export default function ResultsPanel({ room, player, allPlayers }) {
   const [decisions, setDecisions] = useState([])
   const [shocks, setShocks] = useState([])
   const [loading, setLoading] = useState(true)
-  // Use a ref to avoid re-running the effect on every render
-  const loadedRef = useRef(false)
 
   useEffect(() => {
     if (!room?.room_id || !room?.current_turn) return
-    loadedRef.current = false
 
     let cancelled = false
     Promise.all([
@@ -146,7 +143,6 @@ export default function ResultsPanel({ room, player, allPlayers }) {
       // Show only public shocks that were active this turn
       setShocks((shockRes.data ?? []).filter(s => s.visibility === 'public'))
       setLoading(false)
-      loadedRef.current = true
     })
 
     return () => { cancelled = true }
