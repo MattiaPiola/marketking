@@ -120,7 +120,8 @@ export default function AdminPage() {
             </button>
           </div>
           <p className="text-xs text-gray-400 mt-2">
-            Condividi questo codice con gli studenti su <strong>mercatovivo.netlify.app</strong>
+            Condividi questo codice con gli studenti su{' '}
+            <strong>{import.meta.env.VITE_APP_URL ?? 'mercatovivo.netlify.app'}</strong>
           </p>
         </div>
 

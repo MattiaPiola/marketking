@@ -61,7 +61,7 @@ supabase/
 | Session | Focus |
 |---------|-------|
 | 1 | Project scaffold & database schema ✅ |
-| 2 | Auth, room creation & lobby |
+| 2 | Auth, room creation & lobby ✅ |
 | 3 | Core demand & profit engine (Edge Functions) |
 | 4 | Player decision panel & live preview |
 | 5 | Admin panel: turn management & monitoring |

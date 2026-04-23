@@ -125,32 +125,41 @@ function CreateRoomForm({ user }) {
     setError(null)
     setLoading(true)
 
-    const joinCode = generateJoinCode()
+    // Auto-retry up to 3 times on join_code uniqueness collision (very rare)
+    let data = null
+    let lastError = null
+    for (let attempt = 0; attempt < 3; attempt++) {
+      const joinCode = generateJoinCode()
+      const res = await supabase
+        .from('rooms')
+        .insert({
+          admin_id: user.id,
+          name: name.trim(),
+          num_turns: Number(numTurns),
+          budget_initial: Number(budgetInitial),
+          catalog_max: Number(catalogMax),
+          complexity_level: Number(complexityLevel),
+          join_code: joinCode,
+          status: 'lobby',
+        })
+        .select('room_id')
+        .single()
 
-    const { data, error } = await supabase
-      .from('rooms')
-      .insert({
-        admin_id: user.id,
-        name: name.trim(),
-        num_turns: Number(numTurns),
-        budget_initial: Number(budgetInitial),
-        catalog_max: Number(catalogMax),
-        complexity_level: Number(complexityLevel),
-        join_code: joinCode,
-        status: 'lobby',
-      })
-      .select('room_id')
-      .single()
+      if (!res.error) {
+        data = res.data
+        lastError = null
+        break
+      }
+
+      lastError = res.error
+      // Only retry on unique constraint violation for join_code
+      if (res.error.code !== '23505') break
+    }
 
     setLoading(false)
 
-    if (error) {
-      // Retry with a new code if there's a unique conflict on join_code
-      if (error.code === '23505') {
-        setError('Codice join duplicato, riprova.')
-      } else {
-        setError(error.message)
-      }
+    if (lastError) {
+      setError(lastError.message)
       return
     }
 
