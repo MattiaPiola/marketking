@@ -37,6 +37,14 @@ export interface Parameters {
     overflow_threshold: number
     overflow_demand_penalty: number
   }
+  catalog_config: {
+    launch_cost: number
+    management_cost_per_turn: number
+    synergy_bonus: number
+    dilution_base: number
+    dilution_incoherent: number
+    unlock_turn: number
+  }
   market_config: {
     base_consumers: number
     segments: {
@@ -77,6 +85,7 @@ export interface TurnResult {
   production_costs: number
   inventory_costs: number
   marketing_costs: number
+  catalog_costs: number
   profit: number
   cumulative_profit: number
   reputation: number
@@ -394,8 +403,8 @@ export function calculateTurnResults(
   // ── 8. Production cap (L2+) & inventory units ────────────────────────────
   //   L1: no production limit (set large enough to never cap)
   const production = complexityLevel >= 2 ? decision.production : 10_000
-  const unitsSold = Math.min(Math.floor(demand), production)
-  const inventoryUnits = Math.max(0, production - unitsSold)
+  let unitsSold = Math.min(Math.floor(demand), production)
+  let inventoryUnits = Math.max(0, production - unitsSold)
 
   // ── 9. Costs ─────────────────────────────────────────────────────────────
   const baseCost = (params.costs_by_quality as Record<string, number>)[tier]
@@ -404,15 +413,105 @@ export function calculateTurnResults(
     : 1.0
 
   // GDD: production_costs = min(demand, production) × base_cost × scale_factor
-  const productionCosts  = unitsSold * baseCost * scaleFactor
-  const inventoryCosts   = complexityLevel >= 2
+  let productionCosts  = unitsSold * baseCost * scaleFactor
+  let inventoryCosts   = complexityLevel >= 2
     ? inventoryUnits * params.inventory_config.storage_cost_per_unit
     : 0
-  const marketingCosts   = decision.marketing
+  let marketingCosts   = decision.marketing
 
   // ── 10. Revenue & profit ──────────────────────────────────────────────────
-  const revenues         = unitsSold * decision.price
-  const totalCosts       = productionCosts + inventoryCosts + marketingCosts
+  let revenues         = unitsSold * decision.price
+  let catalogCosts     = 0
+
+  // ── 10.5 Multi-product calculation (L2+) ────────────────────────────────
+  // Extra products in decision.products[] each generate independent demand.
+  // Quality coherence across all products applies synergy/dilution.
+  const extraProducts = (complexityLevel >= 2 && Array.isArray(decision.products))
+    ? (decision.products as Array<Record<string, unknown>>)
+    : []
+
+  if (extraProducts.length > 0) {
+    // Quality coherence check: primary + all extra products
+    const allQualities = [decision.quality, ...extraProducts.map(p => Number(p.quality))]
+    const qMax = Math.max(...allQualities)
+    const qMin = Math.min(...allQualities)
+    const coherent = (qMax - qMin) <= 2
+
+    const catalogConfig = params.catalog_config as Record<string, number>
+    const synergyBonus    = coherent ? (catalogConfig.synergy_bonus ?? 0.08) : 0
+    const dilutionBase    = coherent ? 0 : (catalogConfig.dilution_base ?? -0.04)
+    const dilutionIncoherent = coherent ? 0 : (catalogConfig.dilution_incoherent ?? -0.10)
+
+    // Apply dilution to primary product if incoherent catalog
+    if (!coherent) {
+      const primaryAdjust = 1 + dilutionBase
+      const adjUnitsSold = Math.min(Math.floor(demand * primaryAdjust), production)
+      const adjInventory = Math.max(0, production - adjUnitsSold)
+      revenues        = adjUnitsSold * decision.price
+      productionCosts = adjUnitsSold * baseCost * scaleFactor
+      inventoryCosts  = complexityLevel >= 2
+        ? adjInventory * params.inventory_config.storage_cost_per_unit : 0
+      unitsSold      = adjUnitsSold
+      inventoryUnits = adjInventory
+    }
+
+    // Calculate each extra product's contribution
+    for (const prod of extraProducts) {
+      const pQuality    = Number(prod.quality)
+      const pPrice      = Number(prod.price)
+      const pMarketing  = Number(prod.marketing ?? 0)
+      const pProduction = Number(prod.production ?? 0)
+
+      const pTier        = getQualityTier(pQuality)
+      const pRefPrice    = REFERENCE_PRICES[pTier]
+      const pElasticity  = (params.elasticity_by_quality as Record<string, number>)[pTier]
+      const pMarketShare = QUALITY_MARKET_SHARES[pTier]
+      const pBaseCost    = (params.costs_by_quality as Record<string, number>)[pTier]
+
+      const pPriceDeltaPct = (pPrice - pRefPrice) / pRefPrice
+      let pDemand = Math.max(0, baseConsumers * pMarketShare * (1 + pPriceDeltaPct * pElasticity))
+
+      const pAwareness = calcMarketingAwareness(pMarketing, params.marketing_config)
+      pDemand *= (1 + pAwareness)
+
+      const pWomBoost = ((pQuality / 2 - 2.5) / 2.5) * 0.05
+      pDemand *= (1 + pWomBoost)
+
+      // Apply shock for this product
+      const pShockMult = calcShockMultiplier(activeShocks, { ...decision, quality: pQuality }, playerId)
+      pDemand *= pShockMult
+
+      // Apply synergy or dilution to extra product's demand
+      pDemand *= (1 + synergyBonus + dilutionIncoherent)
+      pDemand = Math.max(0, pDemand)
+
+      const pUnitsSold    = Math.min(Math.floor(pDemand), pProduction)
+      const pInventory    = Math.max(0, pProduction - pUnitsSold)
+      const pScaleFactor  = getScaleFactor(pProduction, params.scale_factors)
+
+      revenues        += pUnitsSold * pPrice
+      productionCosts += pUnitsSold * pBaseCost * pScaleFactor
+      inventoryCosts  += pInventory * params.inventory_config.storage_cost_per_unit
+      marketingCosts  += pMarketing
+      unitsSold       += pUnitsSold
+      inventoryUnits  += pInventory
+    }
+
+    // Catalog management cost: €50/extra-product/turn
+    const mgmtCost = extraProducts.length * (catalogConfig.management_cost_per_turn ?? 50)
+    catalogCosts += mgmtCost
+
+    // Catalog launch cost: €800 per newly introduced product type
+    const prevProducts = ((prevResult?.position_data?.products ?? []) as string[])
+    for (const prod of extraProducts) {
+      const pType = String(prod.product_type ?? '')
+      if (pType && !prevProducts.includes(pType)) {
+        catalogCosts += (catalogConfig.launch_cost ?? 800)
+      }
+    }
+  }
+
+  const totalCosts       = productionCosts + inventoryCosts + marketingCosts + catalogCosts
   const profit           = revenues - totalCosts
   const prevCumulative   = prevResult?.cumulative_profit ?? 0
   const cumulativeProfit = prevCumulative + profit
@@ -434,11 +533,16 @@ export function calculateTurnResults(
   }
 
   // ── 12. Assemble output ───────────────────────────────────────────────────
+  // Track launched product types in position_data so launch costs can be
+  // correctly identified as "new" in subsequent turns.
+  const launchedProducts = extraProducts.map(p => String(p.product_type ?? '')).filter(Boolean)
+
   const positionData = {
     price: decision.price,
     quality: decision.quality,
     reputation: newReputation,
     quality_changed: qualityChanged,
+    products: launchedProducts,
   }
 
   const feedbackData = buildFeedbackData(
@@ -463,6 +567,7 @@ export function calculateTurnResults(
     production_costs:  round2(productionCosts),
     inventory_costs:   round2(inventoryCosts),
     marketing_costs:   round2(marketingCosts),
+    catalog_costs:     round2(catalogCosts),
     profit:            round2(profit),
     cumulative_profit: round2(cumulativeProfit),
     reputation:        round4(newReputation),

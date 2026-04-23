@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { supabase } from '../lib/supabase'
 
-const DEFAULT_DECISION = { quality: 5, price: 20, marketing: 0, production: 100 }
+const DEFAULT_DECISION = { quality: 5, price: 20, marketing: 0, production: 100, products: [] }
 
 /**
  * Manages the decision state for the current player in the current turn.
@@ -62,6 +62,7 @@ export function useDecision({ roomId, playerId, currentTurn, complexityLevel }) 
           price: Number(d.price),
           marketing: Number(d.marketing),
           production: d.production,
+          products: Array.isArray(d.products) ? d.products : [],
         })
       } else {
         setDecision(DEFAULT_DECISION)
@@ -97,7 +98,7 @@ export function useDecision({ roomId, playerId, currentTurn, complexityLevel }) 
           price: decision.price,
           marketing: decision.marketing,
           production: decision.production,
-          products: [],
+          products: decision.products ?? [],
         },
         { onConflict: 'player_id,turn' },
       )
@@ -115,6 +116,47 @@ export function useDecision({ roomId, playerId, currentTurn, complexityLevel }) 
     [confirmed],
   )
 
+  /** Add a new catalog product (L2+, turn ≥ unlock_turn). */
+  const addProduct = useCallback(
+    (productType) => {
+      if (confirmed) return
+      setDecision(prev => ({
+        ...prev,
+        products: [
+          ...(prev.products ?? []),
+          { product_type: productType, quality: 5, price: 20, marketing: 0, production: 100 },
+        ],
+      }))
+    },
+    [confirmed],
+  )
+
+  /** Update a field of an extra product at the given index. */
+  const setProductField = useCallback(
+    (index, field, value) => {
+      if (confirmed) return
+      setDecision(prev => {
+        const products = [...(prev.products ?? [])]
+        products[index] = { ...products[index], [field]: value }
+        return { ...prev, products }
+      })
+    },
+    [confirmed],
+  )
+
+  /** Remove an extra product (only if not yet launched, i.e. not in prevResult). */
+  const removeProduct = useCallback(
+    (index) => {
+      if (confirmed) return
+      setDecision(prev => {
+        const products = [...(prev.products ?? [])]
+        products.splice(index, 1)
+        return { ...prev, products }
+      })
+    },
+    [confirmed],
+  )
+
   const confirmDecision = useCallback(async () => {
     if (confirmed || saving) return
     setSaving(true)
@@ -128,7 +170,7 @@ export function useDecision({ roomId, playerId, currentTurn, complexityLevel }) 
         price: decision.price,
         marketing: decision.marketing,
         production: decision.production,
-        products: [],
+        products: decision.products ?? [],
         confirmed_at: now,
       },
       { onConflict: 'player_id,turn' },
@@ -138,5 +180,5 @@ export function useDecision({ roomId, playerId, currentTurn, complexityLevel }) 
     setSaving(false)
   }, [confirmed, saving, playerId, roomId, currentTurn, decision])
 
-  return { decision, setField, params, prevResult, confirmed, saving, confirmDecision }
+  return { decision, setField, addProduct, setProductField, removeProduct, params, prevResult, confirmed, saving, confirmDecision }
 }
