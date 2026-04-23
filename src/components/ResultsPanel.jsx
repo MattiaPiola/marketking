@@ -16,8 +16,8 @@ function MultiPriceQualityMap({ players, decisions }) {
   const H = 180
   const PAD = 30
 
-  // Clamp to [5,50] for display but allow any price
-  const xScale = p => PAD + ((Math.min(Math.max(p, 5), 100) - 5) / 95) * (W - PAD * 2)
+  // Clamp to [5,50] for display (prices beyond €50 render at the right edge)
+  const xScale = p => PAD + ((Math.min(Math.max(p, 5), 50) - 5) / 45) * (W - PAD * 2)
   const yScale = q => PAD + ((10 - Math.min(Math.max(q, 1), 10)) / 9) * (H - PAD * 2)
 
   const decByPlayer = Object.fromEntries(decisions.map(d => [d.player_id, d]))
@@ -43,7 +43,7 @@ function MultiPriceQualityMap({ players, decisions }) {
 
         {/* Axis labels */}
         <text x={PAD + (W - PAD * 2) / 2} y={H - 6} fontSize={8} fill="#6b7280" textAnchor="middle">
-          Prezzo (€5+)
+          Prezzo (€5–€50+)
         </text>
         <text
           x={10}

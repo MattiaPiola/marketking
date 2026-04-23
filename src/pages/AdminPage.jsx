@@ -49,7 +49,7 @@ function DecisionValues({ dec }) {
   return (
     <span className="text-xs text-gray-500 ml-2">
       Q{dec.quality} · €{dec.price} · mkt€{dec.marketing}
-      {dec.production != null ? ` · ${dec.production}pz` : ''}
+      {dec.production != null ? ` · ${dec.production} pz` : ''}
     </span>
   )
 }
@@ -411,7 +411,7 @@ export default function AdminPage() {
                         {p.nickname}
                       </span>
                       <PlayerStatusBadge status={p.status} />
-                      {(p.status === 'deciding' || p.status === 'confirmed') && (
+                              {(p.status === 'deciding' || p.status === 'confirmed') && (
                         <DecisionValues dec={dec} />
                       )}
                     </li>
