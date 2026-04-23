@@ -236,31 +236,40 @@ export default function DecisionPanel({ room, player }) {
               <input
                 type="number"
                 min={5}
-                max={50}
                 step={0.5}
                 value={decision.price}
-                onChange={e =>
-                  setField('price', Math.min(50, Math.max(5, Number(e.target.value))))
-                }
+                onChange={e => setField('price', Math.max(5, Number(e.target.value)))}
                 disabled={disabled}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:bg-gray-50 disabled:opacity-60"
               />
             </div>
-            <p className="text-xs text-gray-400 mt-1">Min €5 – Max €50</p>
+            <p className="text-xs text-gray-400 mt-1">Min €5</p>
           </div>
 
           {/* Marketing */}
           <div>
             <div className="flex items-center justify-between mb-1.5">
               <label className="text-sm font-medium text-gray-700">Marketing</label>
-              <span className="text-sm font-bold text-gray-900">€{decision.marketing}</span>
+              <div className="flex items-center gap-1">
+                <span className="text-sm text-gray-500">€</span>
+                <input
+                  type="number"
+                  min={0}
+                  step={10}
+                  value={decision.marketing}
+                  onChange={e => setField('marketing', Math.max(0, Number(e.target.value)))}
+                  disabled={disabled}
+                  className="w-20 px-1 py-0.5 text-sm font-bold text-gray-900 border border-gray-200 rounded text-right focus:outline-none focus:ring-1 focus:ring-indigo-500 disabled:bg-transparent disabled:border-transparent"
+                />
+              </div>
             </div>
+            {/* Slider clamped to 0–500; number input above allows custom values beyond 500 */}
             <input
               type="range"
               min={0}
               max={500}
               step={10}
-              value={decision.marketing}
+              value={Math.min(decision.marketing, 500)}
               onChange={e => setField('marketing', Number(e.target.value))}
               disabled={disabled}
               className="w-full accent-indigo-600 disabled:opacity-50"
@@ -268,8 +277,13 @@ export default function DecisionPanel({ room, player }) {
             <div className="flex justify-between text-xs text-gray-400 mt-0.5">
               <span>€0</span>
               <span className="text-indigo-500">{marketingRateHint(decision.marketing)}</span>
-              <span>€500</span>
+              <span>€500+</span>
             </div>
+            {decision.marketing > 500 && (
+              <p className="text-xs text-amber-600 mt-0.5">
+                ✏️ Valore personalizzato oltre il range slider (€{decision.marketing})
+              </p>
+            )}
           </div>
 
           {/* Production – L2+ only */}
@@ -277,14 +291,26 @@ export default function DecisionPanel({ room, player }) {
             <div>
               <div className="flex items-center justify-between mb-1.5">
                 <label className="text-sm font-medium text-gray-700">Produzione</label>
-                <span className="text-sm font-bold text-gray-900">{decision.production} pz</span>
+                <div className="flex items-center gap-1">
+                  <input
+                    type="number"
+                    min={0}
+                    step={10}
+                    value={decision.production}
+                    onChange={e => setField('production', Math.max(0, Number(e.target.value)))}
+                    disabled={disabled}
+                    className="w-20 px-1 py-0.5 text-sm font-bold text-gray-900 border border-gray-200 rounded text-right focus:outline-none focus:ring-1 focus:ring-indigo-500 disabled:bg-transparent disabled:border-transparent"
+                  />
+                  <span className="text-sm text-gray-500">pz</span>
+                </div>
               </div>
+              {/* Slider clamped to 0–1000; number input above allows custom values beyond 1000 */}
               <input
                 type="range"
                 min={0}
                 max={1000}
                 step={10}
-                value={decision.production}
+                value={Math.min(decision.production, 1000)}
                 onChange={e => setField('production', Number(e.target.value))}
                 disabled={disabled}
                 className="w-full accent-indigo-600 disabled:opacity-50"
@@ -292,8 +318,13 @@ export default function DecisionPanel({ room, player }) {
               <div className="flex justify-between text-xs text-gray-400 mt-0.5">
                 <span>0 pz</span>
                 <span className="text-indigo-500">{scaleHint(decision.production)}</span>
-                <span>1000 pz</span>
+                <span>1000+ pz</span>
               </div>
+              {decision.production > 1000 && (
+                <p className="text-xs text-amber-600 mt-0.5">
+                  ✏️ Valore personalizzato oltre il range slider ({decision.production} pz)
+                </p>
+              )}
             </div>
           )}
 

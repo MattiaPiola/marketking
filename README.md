@@ -62,10 +62,10 @@ supabase/
 |---------|-------|
 | 1 | Project scaffold & database schema ✅ |
 | 2 | Auth, room creation & lobby ✅ |
-| 3 | Core demand & profit engine (Edge Functions) |
-| 4 | Player decision panel & live preview |
-| 5 | Admin panel: turn management & monitoring |
-| 6 | Results reveal & post-turn feedback |
+| 3 | Core demand & profit engine (Edge Functions) ✅ |
+| 4 | Player decision panel & live preview ✅ |
+| 5 | Admin panel: turn management & monitoring ✅ |
+| 6 | Results reveal & post-turn feedback ✅ |
 | 7 | Shock system |
 | 8 | Expandable catalog & complexity levels |
 | 9 | Admin analytics, parameter tuning & game end |
