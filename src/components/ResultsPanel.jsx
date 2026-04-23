@@ -16,7 +16,8 @@ function MultiPriceQualityMap({ players, decisions }) {
   const H = 180
   const PAD = 30
 
-  // Clamp to [5,50] for display (prices beyond €50 render at the right edge)
+  // Prices beyond €50 are clamped to the right edge of the chart; the axis label
+  // shows "€5–€50+" to indicate the visual range is not exhaustive.
   const xScale = p => PAD + ((Math.min(Math.max(p, 5), 50) - 5) / 45) * (W - PAD * 2)
   const yScale = q => PAD + ((10 - Math.min(Math.max(q, 1), 10)) / 9) * (H - PAD * 2)
 

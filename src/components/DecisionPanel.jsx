@@ -263,6 +263,7 @@ export default function DecisionPanel({ room, player }) {
                 />
               </div>
             </div>
+            {/* Slider clamped to 0–500; number input above allows custom values beyond 500 */}
             <input
               type="range"
               min={0}
@@ -278,6 +279,11 @@ export default function DecisionPanel({ room, player }) {
               <span className="text-indigo-500">{marketingRateHint(decision.marketing)}</span>
               <span>€500+</span>
             </div>
+            {decision.marketing > 500 && (
+              <p className="text-xs text-amber-600 mt-0.5">
+                ✏️ Valore personalizzato oltre il range slider (€{decision.marketing})
+              </p>
+            )}
           </div>
 
           {/* Production – L2+ only */}
@@ -298,6 +304,7 @@ export default function DecisionPanel({ room, player }) {
                   <span className="text-sm text-gray-500">pz</span>
                 </div>
               </div>
+              {/* Slider clamped to 0–1000; number input above allows custom values beyond 1000 */}
               <input
                 type="range"
                 min={0}
@@ -313,6 +320,11 @@ export default function DecisionPanel({ room, player }) {
                 <span className="text-indigo-500">{scaleHint(decision.production)}</span>
                 <span>1000+ pz</span>
               </div>
+              {decision.production > 1000 && (
+                <p className="text-xs text-amber-600 mt-0.5">
+                  ✏️ Valore personalizzato oltre il range slider ({decision.production} pz)
+                </p>
+              )}
             </div>
           )}
 
