@@ -40,6 +40,17 @@ Connect your repository to Netlify. The `netlify.toml` configures:
 
 Add `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` as environment variables in Netlify.
 
+### Deployment (Vercel)
+
+Connect your repository to [Vercel](https://vercel.com). The `vercel.json` configures SPA rewrites automatically.
+
+Settings to apply in the Vercel dashboard (or `vercel.json` → overrides):
+- Framework Preset: **Vite**
+- Build command: `npm run build`
+- Output directory: `dist`
+
+Add `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` as environment variables in the Vercel project settings.
+
 ---
 
 ## Project Structure
@@ -66,8 +77,8 @@ supabase/
 | 4 | Player decision panel & live preview ✅ |
 | 5 | Admin panel: turn management & monitoring ✅ |
 | 6 | Results reveal & post-turn feedback ✅ |
-| 7 | Shock system |
-| 8 | Expandable catalog & complexity levels |
-| 9 | Admin analytics, parameter tuning & game end |
-| 10 | Polish, persistence & post-MVP features |
+| 7 | Shock system ✅ |
+| 8 | Expandable catalog & complexity levels ✅ |
+| 9 | Admin analytics, parameter tuning & game end ✅ |
+| 10 | Polish, persistence & post-MVP features ✅ |
 

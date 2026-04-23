@@ -3,6 +3,9 @@ import { useParams, Link } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../hooks/useAuth'
 import { useRoom } from '../hooks/useRoom'
+import ParameterTuningPanel from '../components/ParameterTuningPanel'
+import AdminAnalyticsPanel from '../components/AdminAnalyticsPanel'
+import GameSummary from '../components/GameSummary'
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -301,11 +304,16 @@ export default function AdminPage() {
   const [endTurnError, setEndTurnError] = useState(null)
   const [decisions, setDecisions] = useState([])
   const [results, setResults] = useState([])
+  const [allResults, setAllResults] = useState([])
   const [countdown, setCountdown] = useState(null)
 
   // Shock panel state
   const [shocks, setShocks] = useState([])
   const [showShockForm, setShowShockForm] = useState(false)
+
+  // Analytics / parameter panel toggles
+  const [showParamPanel, setShowParamPanel] = useState(false)
+  const [showAnalytics, setShowAnalytics] = useState(false)
 
   // Use a ref that is updated inside effects only (avoids render-time mutation)
   const roomRef = useRef(room)
@@ -350,6 +358,17 @@ export default function AdminPage() {
       .eq('is_active', true)
       .then(({ data }) => setShocks(data ?? []))
   }, [roomId, room?.current_turn])
+
+  // ── Fetch all results (all turns) for analytics & completed summary ───────
+  useEffect(() => {
+    if (!roomId) return
+    supabase
+      .from('results')
+      .select('*')
+      .eq('room_id', roomId)
+      .order('turn', { ascending: true })
+      .then(({ data }) => setAllResults(data ?? []))
+  }, [roomId, room?.current_turn, room?.turn_phase, room?.status])
 
   // ── Countdown timer ───────────────────────────────────────────────────────
   const handleEndTurn = useCallback(async () => {
@@ -739,6 +758,58 @@ export default function AdminPage() {
           </div>
         )}
 
+        {/* ── PARAMETER TUNING (results phase between turns) ──────────────── */}
+        {isActive && isResults && room.current_turn < room.num_turns && (
+          <div className="bg-white rounded-xl border border-gray-200 p-5 mb-5">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-sm font-semibold text-gray-700">⚙️ Parametri economici</h2>
+              <button
+                onClick={() => setShowParamPanel(v => !v)}
+                className="px-3 py-1 text-xs border border-indigo-300 text-indigo-700 rounded-lg hover:bg-indigo-50 transition-colors font-medium"
+              >
+                {showParamPanel ? 'Chiudi' : 'Modifica'}
+              </button>
+            </div>
+            {showParamPanel && (
+              <ParameterTuningPanel roomId={roomId} complexityLevel={room.complexity_level} />
+            )}
+            {!showParamPanel && (
+              <p className="text-xs text-gray-400 italic">
+                Ritocca elasticità, costi e scale factors prima del prossimo turno.
+              </p>
+            )}
+          </div>
+        )}
+
+        {/* ── ADMIN ANALYTICS (results phase) ─────────────────────────────── */}
+        {isActive && isResults && (
+          <div className="bg-white rounded-xl border border-gray-200 p-5 mb-5">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-sm font-semibold text-gray-700">📊 Analisi & Dinamiche</h2>
+              <button
+                onClick={() => setShowAnalytics(v => !v)}
+                className="px-3 py-1 text-xs border border-blue-300 text-blue-700 rounded-lg hover:bg-blue-50 transition-colors font-medium"
+              >
+                {showAnalytics ? 'Chiudi' : 'Mostra'}
+              </button>
+            </div>
+            {showAnalytics && (
+              <AdminAnalyticsPanel
+                players={players}
+                results={results}
+                allResults={allResults}
+                decisions={decisions}
+                currentTurn={room.current_turn}
+              />
+            )}
+            {!showAnalytics && (
+              <p className="text-xs text-gray-400 italic">
+                Strategie per giocatore, trend di profitto e dinamiche di mercato.
+              </p>
+            )}
+          </div>
+        )}
+
         {/* ── PLAYER MONITORING (deciding phase) ──────────────────────────── */}
         {isActive && isDeciding && (
           <div className="bg-white rounded-xl border border-gray-200 p-5 mb-5">
@@ -868,13 +939,9 @@ export default function AdminPage() {
           </>
         )}
 
-        {/* Completed state */}
+        {/* ── COMPLETED STATE – full game summary ──────────────────────────── */}
         {isCompleted && (
-          <div className="text-center py-6">
-            <div className="text-4xl mb-3">🏁</div>
-            <p className="text-lg font-bold text-gray-800">Partita terminata!</p>
-            <p className="text-sm text-gray-500 mt-1">Tutti i turni sono stati completati.</p>
-          </div>
+          <GameSummary room={room} players={players} />
         )}
 
       </div>
