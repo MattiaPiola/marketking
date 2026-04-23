@@ -2,6 +2,7 @@ import { useParams, Link } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
 import { useRoom } from '../hooks/useRoom'
 import DecisionPanel from '../components/DecisionPanel'
+import ResultsPanel from '../components/ResultsPanel'
 
 function PlayerRow({ player, isMe }) {
   return (
@@ -86,7 +87,7 @@ export default function RoomPage() {
           </div>
         )}
 
-        {/* Active turn – decision panel */}
+        {/* Active turn – decision or results panel */}
         {isActive && me && (
           <>
             <div className="mb-5">
@@ -94,7 +95,11 @@ export default function RoomPage() {
                 ▶ Turno {room.current_turn} di {room.num_turns} in corso
               </span>
             </div>
-            <DecisionPanel room={room} player={me} />
+            {room.turn_phase === 'results' ? (
+              <ResultsPanel room={room} player={me} allPlayers={players} />
+            ) : (
+              <DecisionPanel room={room} player={me} />
+            )}
           </>
         )}
 
