@@ -9,6 +9,15 @@ function fmt(n) {
 
 const RANK_MEDALS = ['🥇', '🥈', '🥉']
 
+const SHOCK_TYPE_LABELS = {
+  seasonal:      '📅 Stagionale',
+  trend_shift:   '📈 Cambio tendenza',
+  competitor:    '🏭 Mossa competitor',
+  economic:      '💰 Evento economico',
+  supply_chain:  '🚚 Supply chain',
+  viral:         '🔥 Virale',
+}
+
 // ── Price-Quality Map (multi-player) ─────────────────────────────────────────
 
 function MultiPriceQualityMap({ players, decisions }) {
@@ -102,11 +111,13 @@ export default function ResultsPanel({ room, player, allPlayers }) {
   const complexityLevel = room.complexity_level
   const [results, setResults] = useState([])
   const [decisions, setDecisions] = useState([])
+  const [shocks, setShocks] = useState([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     if (!room?.room_id || !room?.current_turn) return
-    setLoading(true)
+
+    let cancelled = false
     Promise.all([
       supabase
         .from('results')
@@ -118,11 +129,23 @@ export default function ResultsPanel({ room, player, allPlayers }) {
         .select('*')
         .eq('room_id', room.room_id)
         .eq('turn', room.current_turn),
-    ]).then(([resRes, decRes]) => {
+      supabase
+        .from('shocks')
+        .select('*')
+        .eq('room_id', room.room_id)
+        .eq('is_active', false)
+        .lte('turn', room.current_turn)
+        .gte('turn', room.current_turn),
+    ]).then(([resRes, decRes, shockRes]) => {
+      if (cancelled) return
       setResults(resRes.data ?? [])
       setDecisions(decRes.data ?? [])
+      // Show only public shocks that were active this turn
+      setShocks((shockRes.data ?? []).filter(s => s.visibility === 'public'))
       setLoading(false)
     })
+
+    return () => { cancelled = true }
   }, [room?.room_id, room?.current_turn])
 
   if (loading) {
@@ -144,6 +167,22 @@ export default function ResultsPanel({ room, player, allPlayers }) {
           Turno {room.current_turn} – Risultati
         </h2>
       </div>
+
+      {/* ── Public shocks that affected this turn ────────────────────────── */}
+      {shocks.length > 0 && (
+        <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 space-y-2">
+          <p className="text-sm font-semibold text-amber-800">⚡ Shock di mercato questo turno</p>
+          {shocks.map(s => (
+            <div key={s.shock_id} className="text-sm text-amber-700">
+              <span className="font-medium">{SHOCK_TYPE_LABELS[s.type] ?? s.type}</span>
+              {s.description && <span className="ml-2 text-amber-600">{s.description}</span>}
+              <span className={`ml-2 font-semibold ${Number(s.intensity_value) >= 0 ? 'text-green-700' : 'text-red-600'}`}>
+                ({Number(s.intensity_value) >= 0 ? '+' : ''}{Math.round(Number(s.intensity_value) * 100)}% domanda)
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
 
       {/* ── My results card ─────────────────────────────────────────────── */}
       {myResult ? (
@@ -175,6 +214,12 @@ export default function ResultsPanel({ room, player, allPlayers }) {
                 <span className="text-gray-400">Costi marketing</span>
                 <span className="text-gray-600">{fmt(myResult.marketing_costs)}</span>
               </div>
+              {complexityLevel >= 2 && (myResult.catalog_costs ?? 0) > 0 && (
+                <div className="flex justify-between text-xs">
+                  <span className="text-gray-400">Costi catalogo</span>
+                  <span className="text-gray-600">{fmt(myResult.catalog_costs)}</span>
+                </div>
+              )}
             </div>
             <div className="border-t border-gray-200 pt-2 flex justify-between font-bold text-base">
               <span className="text-gray-700">Profitto netto</span>
@@ -268,7 +313,7 @@ export default function ResultsPanel({ room, player, allPlayers }) {
       {/* Waiting banner */}
       <div className="bg-indigo-50 border border-indigo-100 rounded-xl p-4 text-center">
         <p className="text-sm text-indigo-700 font-medium">
-          ⏳ In attesa che l'admin avvii il prossimo turno…
+          ⏳ In attesa che l&apos;admin avvii il prossimo turno…
         </p>
       </div>
     </div>

@@ -19,6 +19,34 @@ function fmtCountdown(seconds) {
 
 const RANK_MEDALS = ['🥇', '🥈', '🥉']
 
+const COMPLEXITY_LABELS = {
+  1: 'L1 – Elasticità Pura',
+  2: 'L2 – Equilibrio Naturale',
+  3: 'L3 – Economia Complessa',
+}
+
+const SHOCK_TYPES = [
+  { value: 'seasonal',     label: '📅 Stagionale' },
+  { value: 'trend_shift',  label: '📈 Cambio tendenza' },
+  { value: 'competitor',   label: '🏭 Mossa competitor' },
+  { value: 'economic',     label: '💰 Evento economico' },
+  { value: 'supply_chain', label: '🚚 Supply chain' },
+  { value: 'viral',        label: '🔥 Virale' },
+]
+
+const TARGETING_TYPES = [
+  { value: 'global',    label: 'Globale (tutti)' },
+  { value: 'segmental', label: 'Segmentale (fasce qualità)' },
+  { value: 'selective', label: 'Selettivo (giocatori specifici)' },
+]
+
+const QUALITY_TIERS = [
+  { value: 1, label: 'Q1–3 Budget' },
+  { value: 2, label: 'Q4–6 Standard' },
+  { value: 3, label: 'Q7–9 Premium' },
+  { value: 4, label: 'Q10 Esclusivo' },
+]
+
 // ── Sub-components ────────────────────────────────────────────────────────────
 
 function PlayerStatusBadge({ status }) {
@@ -54,6 +82,208 @@ function DecisionValues({ dec }) {
   )
 }
 
+// ── ShockForm ─────────────────────────────────────────────────────────────────
+
+function ShockForm({ roomId, players, currentTurn, onCreated }) {
+  const [type, setType] = useState('seasonal')
+  const [intensity, setIntensity] = useState(0.20)
+  const [targeting, setTargeting] = useState('global')
+  const [qualityTiers, setQualityTiers] = useState([])
+  const [selectedPlayers, setSelectedPlayers] = useState([])
+  const [duration, setDuration] = useState(1)
+  const [visibility, setVisibility] = useState('public')
+  const [description, setDescription] = useState('')
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState(null)
+
+  function toggleTier(val) {
+    setQualityTiers(prev =>
+      prev.includes(val) ? prev.filter(t => t !== val) : [...prev, val]
+    )
+  }
+
+  function togglePlayer(id) {
+    setSelectedPlayers(prev =>
+      prev.includes(id) ? prev.filter(p => p !== id) : [...prev, id]
+    )
+  }
+
+  async function handleSubmit(e) {
+    e.preventDefault()
+    setError(null)
+    setSaving(true)
+
+    const targeting_params = {}
+    if (targeting === 'segmental') targeting_params.quality_tiers = qualityTiers
+    if (targeting === 'selective') targeting_params.player_ids = selectedPlayers
+
+    const { error: err } = await supabase.from('shocks').insert({
+      room_id: roomId,
+      turn: currentTurn,
+      type,
+      intensity_value: intensity,
+      targeting,
+      targeting_params,
+      turns_remaining: duration,
+      is_active: true,
+      visibility,
+      description: description.trim() || null,
+    })
+
+    setSaving(false)
+    if (err) {
+      setError(err.message)
+    } else {
+      onCreated?.()
+      setDescription('')
+    }
+  }
+
+  return (
+    <form onSubmit={handleSubmit} className="space-y-4">
+      <div className="grid grid-cols-2 gap-3">
+        {/* Type */}
+        <div>
+          <label className="block text-xs font-medium text-gray-600 mb-1">Tipo</label>
+          <select
+            value={type}
+            onChange={e => setType(e.target.value)}
+            className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500"
+          >
+            {SHOCK_TYPES.map(t => (
+              <option key={t.value} value={t.value}>{t.label}</option>
+            ))}
+          </select>
+        </div>
+
+        {/* Duration */}
+        <div>
+          <label className="block text-xs font-medium text-gray-600 mb-1">Durata (turni)</label>
+          <input
+            type="number" min={1} max={5}
+            value={duration}
+            onChange={e => setDuration(Number(e.target.value))}
+            className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500"
+          />
+        </div>
+      </div>
+
+      {/* Intensity */}
+      <div>
+        <div className="flex justify-between mb-1">
+          <label className="text-xs font-medium text-gray-600">Intensità</label>
+          <span className={`text-xs font-bold ${intensity >= 0 ? 'text-green-700' : 'text-red-600'}`}>
+            {intensity >= 0 ? '+' : ''}{Math.round(intensity * 100)}% domanda
+          </span>
+        </div>
+        <input
+          type="range" min={-0.50} max={0.50} step={0.05}
+          value={intensity}
+          onChange={e => setIntensity(Number(e.target.value))}
+          className="w-full accent-indigo-600"
+        />
+        <div className="flex justify-between text-xs text-gray-400 mt-0.5">
+          <span>–50%</span><span>0</span><span>+50%</span>
+        </div>
+      </div>
+
+      {/* Targeting */}
+      <div>
+        <label className="block text-xs font-medium text-gray-600 mb-1">Targeting</label>
+        <select
+          value={targeting}
+          onChange={e => setTargeting(e.target.value)}
+          className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500"
+        >
+          {TARGETING_TYPES.map(t => (
+            <option key={t.value} value={t.value}>{t.label}</option>
+          ))}
+        </select>
+      </div>
+
+      {targeting === 'segmental' && (
+        <div>
+          <label className="block text-xs font-medium text-gray-600 mb-1.5">Fasce qualità colpite</label>
+          <div className="flex flex-wrap gap-2">
+            {QUALITY_TIERS.map(t => (
+              <label key={t.value} className="flex items-center gap-1.5 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={qualityTiers.includes(t.value)}
+                  onChange={() => toggleTier(t.value)}
+                  className="accent-indigo-600"
+                />
+                <span className="text-xs text-gray-700">{t.label}</span>
+              </label>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {targeting === 'selective' && (
+        <div>
+          <label className="block text-xs font-medium text-gray-600 mb-1.5">Giocatori colpiti</label>
+          <div className="flex flex-wrap gap-2">
+            {players.map(p => (
+              <label key={p.player_id} className="flex items-center gap-1.5 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={selectedPlayers.includes(p.player_id)}
+                  onChange={() => togglePlayer(p.player_id)}
+                  className="accent-indigo-600"
+                />
+                <span
+                  className="w-3 h-3 rounded-full inline-block"
+                  style={{ backgroundColor: p.color ?? '#6366f1' }}
+                />
+                <span className="text-xs text-gray-700">{p.nickname}</span>
+              </label>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <div className="grid grid-cols-2 gap-3">
+        {/* Visibility */}
+        <div>
+          <label className="block text-xs font-medium text-gray-600 mb-1">Visibilità</label>
+          <select
+            value={visibility}
+            onChange={e => setVisibility(e.target.value)}
+            className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500"
+          >
+            <option value="public">Pubblico (visibile ai giocatori)</option>
+            <option value="hidden">Nascosto</option>
+          </select>
+        </div>
+
+        {/* Description */}
+        <div>
+          <label className="block text-xs font-medium text-gray-600 mb-1">Descrizione (opz.)</label>
+          <input
+            type="text"
+            maxLength={120}
+            value={description}
+            onChange={e => setDescription(e.target.value)}
+            placeholder="Es: Ondata di caldo estiva…"
+            className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500"
+          />
+        </div>
+      </div>
+
+      {error && <p className="text-red-600 text-xs">{error}</p>}
+
+      <button
+        type="submit"
+        disabled={saving}
+        className="w-full px-4 py-2 bg-amber-600 text-white rounded-lg font-semibold hover:bg-amber-700 disabled:opacity-50 transition-colors text-sm"
+      >
+        {saving ? 'Creazione…' : '⚡ Crea Shock'}
+      </button>
+    </form>
+  )
+}
+
 // ── AdminPage ─────────────────────────────────────────────────────────────────
 
 export default function AdminPage() {
@@ -73,9 +303,17 @@ export default function AdminPage() {
   const [results, setResults] = useState([])
   const [countdown, setCountdown] = useState(null)
 
-  // Ref to avoid stale closure in the auto-end timer
+  // Shock panel state
+  const [shocks, setShocks] = useState([])
+  const [showShockForm, setShowShockForm] = useState(false)
+
+  // Use a ref that is updated inside effects only (avoids render-time mutation)
   const roomRef = useRef(room)
-  roomRef.current = room
+
+  // ── Sync roomRef inside an effect, not during render ───────────────────────
+  useEffect(() => {
+    roomRef.current = room
+  })
 
   // Track whether we've already auto-triggered end turn
   const autoEndFiredRef = useRef(false)
@@ -89,7 +327,7 @@ export default function AdminPage() {
       .eq('room_id', roomId)
       .eq('turn', room.current_turn)
       .then(({ data }) => setDecisions(data ?? []))
-  }, [roomId, room?.current_turn, room?.status, room?.turn_phase])
+  }, [roomId, room?.current_turn, room?.status, room?.turn_phase, room])
 
   // ── Fetch results for results phase ──────────────────────────────────────
   useEffect(() => {
@@ -100,7 +338,18 @@ export default function AdminPage() {
       .eq('room_id', roomId)
       .eq('turn', room.current_turn)
       .then(({ data }) => setResults(data ?? []))
-  }, [roomId, room?.current_turn, room?.turn_phase])
+  }, [roomId, room?.current_turn, room?.turn_phase, room])
+
+  // ── Fetch active shocks ───────────────────────────────────────────────────
+  useEffect(() => {
+    if (!roomId) return
+    supabase
+      .from('shocks')
+      .select('*')
+      .eq('room_id', roomId)
+      .eq('is_active', true)
+      .then(({ data }) => setShocks(data ?? []))
+  }, [roomId, room?.current_turn])
 
   // ── Countdown timer ───────────────────────────────────────────────────────
   const handleEndTurn = useCallback(async () => {
@@ -138,7 +387,8 @@ export default function AdminPage() {
   }, [endingTurn, roomId])
 
   useEffect(() => {
-    if (!room?.turn_ends_at || room.status !== 'active' || room.turn_phase !== 'deciding') {
+    const currentRoom = roomRef.current
+    if (!currentRoom?.turn_ends_at || currentRoom.status !== 'active' || currentRoom.turn_phase !== 'deciding') {
       setCountdown(null)
       return
     }
@@ -162,12 +412,12 @@ export default function AdminPage() {
   async function handleStartGame() {
     setStartError(null)
     setStarting(true)
-    const { error } = await supabase
+    const { error: startErr } = await supabase
       .from('rooms')
       .update({ status: 'active', current_turn: 1, turn_phase: 'deciding' })
       .eq('room_id', roomId)
     setStarting(false)
-    if (error) setStartError(error.message)
+    if (startErr) setStartError(startErr.message)
   }
 
   async function handleCopyCode() {
@@ -208,6 +458,15 @@ export default function AdminPage() {
     await supabase.from('rooms').update({ status: 'completed' }).eq('room_id', roomId)
   }
 
+  async function handleComplexityChange(newLevel) {
+    await supabase.from('rooms').update({ complexity_level: Number(newLevel) }).eq('room_id', roomId)
+  }
+
+  async function handleDeactivateShock(shockId) {
+    await supabase.from('shocks').update({ is_active: false, turns_remaining: 0 }).eq('shock_id', shockId)
+    setShocks(prev => prev.filter(s => s.shock_id !== shockId))
+  }
+
   // ── Guards ────────────────────────────────────────────────────────────────
 
   if (authLoading || loading) {
@@ -230,7 +489,7 @@ export default function AdminPage() {
   if (!user || user.id !== room.admin_id) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-gray-50 p-6">
-        <p className="text-red-600 mb-4">Non sei l'admin di questa stanza.</p>
+        <p className="text-red-600 mb-4">Non sei l&apos;admin di questa stanza.</p>
         <Link to="/" className="text-indigo-600 hover:underline">← Home</Link>
       </div>
     )
@@ -245,8 +504,6 @@ export default function AdminPage() {
 
   // Map decisions by player_id for quick lookup
   const decByPlayer = Object.fromEntries(decisions.map(d => [d.player_id, d]))
-  // Map results by player_id
-  const resByPlayer = Object.fromEntries(results.map(r => [r.player_id, r]))
   // Sorted results for leaderboard
   const sortedResults = [...results].sort((a, b) => b.cumulative_profit - a.cumulative_profit)
 
@@ -386,6 +643,99 @@ export default function AdminPage() {
                 )}
               </div>
             )}
+          </div>
+        )}
+
+        {/* ── SHOCK MANAGEMENT (active deciding phase) ────────────────────── */}
+        {(isActive && isDeciding) && (
+          <div className="bg-white rounded-xl border border-gray-200 p-5 mb-5">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-sm font-semibold text-gray-700">⚡ Shock di mercato</h2>
+              <button
+                onClick={() => setShowShockForm(f => !f)}
+                className="px-3 py-1 text-xs border border-amber-300 text-amber-700 rounded-lg hover:bg-amber-50 transition-colors font-medium"
+              >
+                {showShockForm ? 'Chiudi' : '+ Nuovo shock'}
+              </button>
+            </div>
+
+            {/* Active shocks list */}
+            {shocks.length > 0 ? (
+              <ul className="divide-y divide-gray-100 mb-4">
+                {shocks.map(s => (
+                  <li key={s.shock_id} className="py-2.5 flex items-center gap-2 flex-wrap">
+                    <span className={`text-xs font-bold px-1.5 py-0.5 rounded ${Number(s.intensity_value) >= 0 ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-700'}`}>
+                      {Number(s.intensity_value) >= 0 ? '+' : ''}{Math.round(Number(s.intensity_value) * 100)}%
+                    </span>
+                    <span className="text-xs font-medium text-gray-700">
+                      {SHOCK_TYPES.find(t => t.value === s.type)?.label ?? s.type}
+                    </span>
+                    {s.description && (
+                      <span className="text-xs text-gray-500 italic flex-1">{s.description}</span>
+                    )}
+                    <span className="text-xs text-gray-400">
+                      {s.turns_remaining} turno/i rimasti · {s.visibility === 'public' ? '👁 pubblico' : '🔒 nascosto'}
+                    </span>
+                    <button
+                      onClick={() => handleDeactivateShock(s.shock_id)}
+                      className="text-xs text-red-400 hover:text-red-600 ml-auto"
+                      title="Disattiva shock"
+                    >
+                      ✕
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              !showShockForm && (
+                <p className="text-sm text-gray-400 italic mb-4">Nessuno shock attivo in questo turno.</p>
+              )
+            )}
+
+            {/* Create form */}
+            {showShockForm && (
+              <div className="border-t border-gray-100 pt-4 mt-2">
+                <ShockForm
+                  roomId={roomId}
+                  players={players}
+                  currentTurn={room.current_turn}
+                  onCreated={() => {
+                    setShowShockForm(false)
+                    supabase
+                      .from('shocks')
+                      .select('*')
+                      .eq('room_id', roomId)
+                      .eq('is_active', true)
+                      .then(({ data }) => setShocks(data ?? []))
+                  }}
+                />
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ── COMPLEXITY LEVEL SWITCHER (results phase between turns) ─────── */}
+        {isActive && isResults && room.current_turn < room.num_turns && (
+          <div className="bg-white rounded-xl border border-gray-200 p-5 mb-5">
+            <h2 className="text-sm font-semibold text-gray-700 mb-3">🎓 Livello di complessità</h2>
+            <p className="text-xs text-gray-500 mb-3">
+              Puoi cambiare il livello prima del prossimo turno man mano che gli studenti apprendono i concetti.
+            </p>
+            <div className="flex gap-2 flex-wrap">
+              {[1, 2, 3].map(lvl => (
+                <button
+                  key={lvl}
+                  onClick={() => handleComplexityChange(lvl)}
+                  className={`flex-1 min-w-[80px] px-3 py-2 text-xs font-semibold rounded-lg border transition-colors ${
+                    room.complexity_level === lvl
+                      ? 'bg-indigo-600 text-white border-indigo-600'
+                      : 'border-gray-300 text-gray-700 hover:bg-gray-50'
+                  }`}
+                >
+                  {COMPLEXITY_LABELS[lvl]}
+                </button>
+              ))}
+            </div>
           </div>
         )}
 

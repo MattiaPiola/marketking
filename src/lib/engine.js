@@ -267,23 +267,106 @@ export function calculateTurnResults(decision, params, prevResult, activeShocks,
 
   // ── 8. Production cap (L2+) & inventory ──────────────────────────────────
   const production = complexityLevel >= 2 ? decision.production : 10_000
-  const unitsSold  = Math.min(Math.floor(demand), production)
-  const inventoryUnits = Math.max(0, production - unitsSold)
+  let unitsSold  = Math.min(Math.floor(demand), production)
+  let inventoryUnits = Math.max(0, production - unitsSold)
 
   // ── 9. Costs ─────────────────────────────────────────────────────────────
   const baseCost        = params.costs_by_quality[tier]
   const scaleFactor     = complexityLevel >= 2
     ? getScaleFactor(production, params.scale_factors)
     : 1.0
-  const productionCosts = unitsSold * baseCost * scaleFactor
-  const inventoryCosts  = complexityLevel >= 2
+  let productionCosts = unitsSold * baseCost * scaleFactor
+  let inventoryCosts  = complexityLevel >= 2
     ? inventoryUnits * params.inventory_config.storage_cost_per_unit
     : 0
-  const marketingCosts  = decision.marketing
+  let marketingCosts  = decision.marketing
 
   // ── 10. Revenue & profit ──────────────────────────────────────────────────
-  const revenues         = unitsSold * decision.price
-  const totalCosts       = productionCosts + inventoryCosts + marketingCosts
+  let revenues     = unitsSold * decision.price
+  let catalogCosts = 0
+
+  // ── 10.5 Multi-product calculation (L2+) ────────────────────────────────
+  const extraProducts = (complexityLevel >= 2 && Array.isArray(decision.products))
+    ? decision.products
+    : []
+
+  if (extraProducts.length > 0) {
+    const allQualities = [decision.quality, ...extraProducts.map(p => Number(p.quality))]
+    const qMax = Math.max(...allQualities)
+    const qMin = Math.min(...allQualities)
+    const coherent = (qMax - qMin) <= 2
+
+    const catalogConfig = params.catalog_config ?? {}
+    const synergyBonus       = coherent ? (catalogConfig.synergy_bonus ?? 0.08) : 0
+    const dilutionBase       = coherent ? 0 : (catalogConfig.dilution_base ?? -0.04)
+    const dilutionIncoherent = coherent ? 0 : (catalogConfig.dilution_incoherent ?? -0.10)
+
+    // Apply dilution to primary product if incoherent
+    if (!coherent) {
+      const primaryAdjust = 1 + dilutionBase
+      const adjUnitsSold  = Math.min(Math.floor(demand * primaryAdjust), production)
+      const adjInventory  = Math.max(0, production - adjUnitsSold)
+      revenues        = adjUnitsSold * decision.price
+      productionCosts = adjUnitsSold * baseCost * scaleFactor
+      inventoryCosts  = complexityLevel >= 2
+        ? adjInventory * params.inventory_config.storage_cost_per_unit : 0
+      unitsSold      = adjUnitsSold
+      inventoryUnits = adjInventory
+    }
+
+    for (const prod of extraProducts) {
+      const pQuality    = Number(prod.quality)
+      const pPrice      = Number(prod.price)
+      const pMarketing  = Number(prod.marketing ?? 0)
+      const pProduction = Number(prod.production ?? 0)
+
+      const pTier        = getQualityTier(pQuality)
+      const pRefPrice    = REFERENCE_PRICES[pTier]
+      const pElasticity  = params.elasticity_by_quality[pTier]
+      const pMarketShare = QUALITY_MARKET_SHARES[pTier]
+      const pBaseCost    = params.costs_by_quality[pTier]
+
+      const pPriceDeltaPct = (pPrice - pRefPrice) / pRefPrice
+      let pDemand = Math.max(0, baseConsumers * pMarketShare * (1 + pPriceDeltaPct * pElasticity))
+
+      const pAwareness = calcAwareness(pMarketing, params.marketing_config)
+      pDemand *= (1 + pAwareness)
+
+      const pWomBoost = ((pQuality / 2 - 2.5) / 2.5) * 0.05
+      pDemand *= (1 + pWomBoost)
+
+      const pShockMult = calcShockMultiplier(activeShocks ?? [], { ...decision, quality: pQuality }, playerId ?? '')
+      pDemand *= pShockMult
+
+      pDemand *= (1 + synergyBonus + dilutionIncoherent)
+      pDemand = Math.max(0, pDemand)
+
+      const pUnitsSold   = Math.min(Math.floor(pDemand), pProduction)
+      const pInventory   = Math.max(0, pProduction - pUnitsSold)
+      const pScaleFactor = getScaleFactor(pProduction, params.scale_factors)
+
+      revenues        += pUnitsSold * pPrice
+      productionCosts += pUnitsSold * pBaseCost * pScaleFactor
+      inventoryCosts  += pInventory * params.inventory_config.storage_cost_per_unit
+      marketingCosts  += pMarketing
+      unitsSold       += pUnitsSold
+      inventoryUnits  += pInventory
+    }
+
+    // Management cost: €50/extra-product/turn
+    catalogCosts += extraProducts.length * (catalogConfig.management_cost_per_turn ?? 50)
+
+    // Launch cost: €800 per newly introduced product type
+    const prevProducts = prevResult?.position_data?.products ?? []
+    for (const prod of extraProducts) {
+      const pType = prod.product_type ?? ''
+      if (pType && !prevProducts.includes(pType)) {
+        catalogCosts += (catalogConfig.launch_cost ?? 800)
+      }
+    }
+  }
+
+  const totalCosts       = productionCosts + inventoryCosts + marketingCosts + catalogCosts
   const profit           = revenues - totalCosts
   const prevCumulative   = prevResult?.cumulative_profit ?? 0
   const cumulativeProfit = prevCumulative + profit
@@ -304,11 +387,14 @@ export function calculateTurnResults(decision, params, prevResult, activeShocks,
   }
 
   // ── 12. Assemble output ───────────────────────────────────────────────────
+  const launchedProducts = extraProducts.map(p => p.product_type ?? '').filter(Boolean)
+
   const positionData = {
     price:           decision.price,
     quality:         decision.quality,
     reputation:      newReputation,
     quality_changed: qualityChanged,
+    products:        launchedProducts,
   }
 
   const feedbackData = buildFeedbackData(
@@ -333,6 +419,7 @@ export function calculateTurnResults(decision, params, prevResult, activeShocks,
     production_costs:  r2(productionCosts),
     inventory_costs:   r2(inventoryCosts),
     marketing_costs:   r2(marketingCosts),
+    catalog_costs:     r2(catalogCosts),
     profit:            r2(profit),
     cumulative_profit: r2(cumulativeProfit),
     reputation:        r4(newReputation),

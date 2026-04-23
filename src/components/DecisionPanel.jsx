@@ -2,6 +2,15 @@ import { useMemo } from 'react'
 import { calculateTurnResults } from '../lib/engine'
 import { useDecision } from '../hooks/useDecision'
 
+// ── Constants ─────────────────────────────────────────────────────────────────
+
+const PRODUCT_TYPES = [
+  { value: 'tshirt',  label: 'T-shirt' },
+  { value: 'felpa',   label: 'Felpa' },
+  { value: 'jeans',   label: 'Jeans' },
+  { value: 'sneaker', label: 'Sneaker' },
+]
+
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 function qualityTierLabel(quality) {
@@ -119,6 +128,12 @@ function LivePreview({ preview, complexityLevel }) {
           <span className="text-gray-400">Costi marketing</span>
           <span className="text-gray-600">{preview ? fmt(preview.marketing_costs) : dash}</span>
         </div>
+        {complexityLevel >= 2 && preview?.catalog_costs > 0 && (
+          <div className="flex justify-between text-xs">
+            <span className="text-gray-400">Costi catalogo</span>
+            <span className="text-gray-600">{fmt(preview.catalog_costs)}</span>
+          </div>
+        )}
       </div>
       <div className="border-t border-gray-200 pt-2 flex justify-between font-semibold">
         <span className="text-gray-700">Profitto netto</span>
@@ -148,6 +163,181 @@ function LivePreview({ preview, complexityLevel }) {
   )
 }
 
+// ── Extra Product Input Card ──────────────────────────────────────────────────
+
+function ExtraProductCard({ product, index, disabled, onSetField, onRemove, isLaunched }) {
+  const tierLabel = qualityTierLabel(Number(product.quality))
+  const typeLabel = PRODUCT_TYPES.find(t => t.value === product.product_type)?.label ?? product.product_type
+
+  return (
+    <div className="border border-indigo-200 rounded-xl p-4 bg-indigo-50 space-y-3">
+      <div className="flex items-center justify-between">
+        <div>
+          <span className="text-sm font-semibold text-indigo-800">{typeLabel}</span>
+          {isLaunched && (
+            <span className="ml-2 text-xs text-green-700 bg-green-100 px-1.5 py-0.5 rounded">
+              Attivo
+            </span>
+          )}
+          {!isLaunched && (
+            <span className="ml-2 text-xs text-amber-700 bg-amber-100 px-1.5 py-0.5 rounded">
+              Lancio: €800
+            </span>
+          )}
+        </div>
+        {!disabled && !isLaunched && (
+          <button
+            onClick={() => onRemove(index)}
+            className="text-xs text-red-500 hover:text-red-700 transition-colors"
+            title="Rimuovi prodotto"
+          >
+            ✕
+          </button>
+        )}
+      </div>
+
+      {/* Quality */}
+      <div>
+        <div className="flex justify-between mb-1">
+          <span className="text-xs font-medium text-gray-600">Qualità</span>
+          <span className="text-xs font-bold text-gray-800">
+            {product.quality} <span className="font-normal text-gray-400">({tierLabel})</span>
+          </span>
+        </div>
+        <input
+          type="range" min={1} max={10} step={1}
+          value={product.quality}
+          onChange={e => onSetField(index, 'quality', Number(e.target.value))}
+          disabled={disabled}
+          className="w-full accent-indigo-500 disabled:opacity-50"
+        />
+      </div>
+
+      {/* Price */}
+      <div className="flex items-center gap-2">
+        <span className="text-xs font-medium text-gray-600 w-20">Prezzo</span>
+        <span className="text-xs text-gray-500">€</span>
+        <input
+          type="number" min={5} step={0.5}
+          value={product.price}
+          onChange={e => onSetField(index, 'price', Math.max(5, Number(e.target.value)))}
+          disabled={disabled}
+          className="w-24 px-2 py-1 border border-gray-300 rounded text-xs focus:outline-none focus:ring-1 focus:ring-indigo-400 disabled:bg-gray-50 disabled:opacity-60"
+        />
+      </div>
+
+      {/* Marketing */}
+      <div className="flex items-center gap-2">
+        <span className="text-xs font-medium text-gray-600 w-20">Marketing</span>
+        <span className="text-xs text-gray-500">€</span>
+        <input
+          type="number" min={0} step={10}
+          value={product.marketing}
+          onChange={e => onSetField(index, 'marketing', Math.max(0, Number(e.target.value)))}
+          disabled={disabled}
+          className="w-24 px-2 py-1 border border-gray-300 rounded text-xs focus:outline-none focus:ring-1 focus:ring-indigo-400 disabled:bg-gray-50 disabled:opacity-60"
+        />
+      </div>
+
+      {/* Production */}
+      <div className="flex items-center gap-2">
+        <span className="text-xs font-medium text-gray-600 w-20">Produzione</span>
+        <input
+          type="number" min={0} step={10}
+          value={product.production}
+          onChange={e => onSetField(index, 'production', Math.max(0, Number(e.target.value)))}
+          disabled={disabled}
+          className="w-24 px-2 py-1 border border-gray-300 rounded text-xs focus:outline-none focus:ring-1 focus:ring-indigo-400 disabled:bg-gray-50 disabled:opacity-60"
+        />
+        <span className="text-xs text-gray-400">pz</span>
+      </div>
+    </div>
+  )
+}
+
+// ── Catalog Section ───────────────────────────────────────────────────────────
+
+function CatalogSection({
+  products, prevLaunchedTypes, disabled, onAdd, onSetField, onRemove,
+  catalogMax, currentTurn, unlockTurn, budget,
+}) {
+  const launchCost = 800
+  const canAddMore = products.length < catalogMax - 1
+  const turnUnlocked = currentTurn >= unlockTurn
+  const canAfford = budget >= launchCost
+  const allTypesAlreadyLaunched = products.every(p => prevLaunchedTypes.includes(p.product_type))
+  const canAdd = canAddMore && turnUnlocked && (canAfford || allTypesAlreadyLaunched) && !disabled
+
+  // Types already in the catalog (including those being added this turn)
+  const usedTypes = products.map(p => p.product_type)
+  const availableTypes = PRODUCT_TYPES.filter(t => !usedTypes.includes(t.value))
+
+  return (
+    <div className="bg-white rounded-xl border border-gray-200 p-5 space-y-4">
+      <div className="flex items-center justify-between">
+        <h3 className="text-sm font-semibold text-gray-700">
+          Catalogo espanso
+          <span className="ml-2 text-xs font-normal text-gray-400">
+            ({products.length + 1}/{catalogMax} prodotti)
+          </span>
+        </h3>
+        {!turnUnlocked && (
+          <span className="text-xs text-gray-400">Disponibile dal turno {unlockTurn}</span>
+        )}
+      </div>
+
+      {products.length === 0 && (
+        <p className="text-xs text-gray-400 italic">Nessun prodotto aggiuntivo. Il tuo catalogo ha 1 prodotto.</p>
+      )}
+
+      {products.map((prod, idx) => (
+        <ExtraProductCard
+          key={idx}
+          product={prod}
+          index={idx}
+          disabled={disabled}
+          onSetField={onSetField}
+          onRemove={onRemove}
+          isLaunched={prevLaunchedTypes.includes(prod.product_type)}
+        />
+      ))}
+
+      {turnUnlocked && canAddMore && !disabled && (
+        <div>
+          {availableTypes.length > 0 ? (
+            <div className="flex flex-wrap gap-2">
+              {availableTypes.map(t => (
+                <button
+                  key={t.value}
+                  onClick={() => onAdd(t.value)}
+                  disabled={!canAfford && !prevLaunchedTypes.includes(t.value)}
+                  title={!canAfford ? `Budget insufficiente (€${launchCost} richiesti)` : `Aggiungi ${t.label} (€${launchCost} lancio + €50/turno)`}
+                  className="px-3 py-1.5 text-xs border border-dashed border-indigo-400 text-indigo-600 rounded-lg hover:bg-indigo-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                >
+                  + {t.label}
+                </button>
+              ))}
+            </div>
+          ) : (
+            <p className="text-xs text-gray-400 italic">Tutti i tipi di prodotto sono già nel catalogo.</p>
+          )}
+          <p className="text-xs text-gray-400 mt-1.5">
+            Lancio: €{launchCost.toLocaleString('it-IT')} una tantum · Gestione: €50/turno per prodotto aggiuntivo
+          </p>
+        </div>
+      )}
+
+      {turnUnlocked && !canAddMore && (
+        <p className="text-xs text-gray-400 italic">Catalogo al massimo ({catalogMax} prodotti).</p>
+      )}
+
+      {!canAdd && turnUnlocked && canAddMore && !disabled && !canAfford && (
+        <p className="text-xs text-red-500">Budget insufficiente per lanciare un nuovo prodotto (€{launchCost} richiesti).</p>
+      )}
+    </div>
+  )
+}
+
 // ── Decision Panel ────────────────────────────────────────────────────────────
 
 /**
@@ -159,7 +349,7 @@ function LivePreview({ preview, complexityLevel }) {
  */
 export default function DecisionPanel({ room, player }) {
   const complexityLevel = room.complexity_level
-  const { decision, setField, params, prevResult, confirmed, saving, confirmDecision } = useDecision({
+  const { decision, setField, addProduct, setProductField, removeProduct, params, prevResult, confirmed, saving, confirmDecision } = useDecision({
     roomId: room.room_id,
     playerId: player.player_id,
     currentTurn: room.current_turn,
@@ -181,6 +371,13 @@ export default function DecisionPanel({ room, player }) {
   const tierLabel = qualityTierLabel(decision.quality)
   const disabled = confirmed
 
+  // Catalog eligibility
+  const catalogConfig = params?.catalog_config ?? {}
+  const unlockTurn = catalogConfig.unlock_turn ?? 3
+  const catalogMax = room.catalog_max ?? 3
+  const prevLaunchedTypes = prevResult?.position_data?.products ?? []
+  const showCatalog = complexityLevel >= 2 && room.current_turn >= unlockTurn
+
   return (
     <div className="space-y-5">
       {/* Confirmed banner */}
@@ -190,7 +387,7 @@ export default function DecisionPanel({ room, player }) {
           <div>
             <p className="font-semibold text-green-800 text-sm">Decisione confermata</p>
             <p className="text-xs text-green-600 mt-0.5">
-              Le tue scelte sono state inviate. Attendi che l'admin termini il turno.
+              Le tue scelte sono state inviate. Attendi che l&apos;admin termini il turno.
             </p>
           </div>
         </div>
@@ -369,6 +566,22 @@ export default function DecisionPanel({ room, player }) {
           </div>
         </div>
       </div>
+
+      {/* ── Catalog expansion (L2+, turn >= unlock_turn) ── */}
+      {showCatalog && (
+        <CatalogSection
+          products={decision.products ?? []}
+          prevLaunchedTypes={prevLaunchedTypes}
+          disabled={disabled}
+          onAdd={addProduct}
+          onSetField={setProductField}
+          onRemove={removeProduct}
+          catalogMax={catalogMax}
+          currentTurn={room.current_turn}
+          unlockTurn={unlockTurn}
+          budget={Number(player.budget_current)}
+        />
+      )}
     </div>
   )
 }

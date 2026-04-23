@@ -130,6 +130,7 @@ Deno.serve(async (req: Request) => {
     reputation_config:     paramsRow.reputation_config,
     marketing_config:      paramsRow.marketing_config,
     inventory_config:      paramsRow.inventory_config,
+    catalog_config:        paramsRow.catalog_config,
     market_config:         paramsRow.market_config,
   }
 
@@ -199,6 +200,7 @@ Deno.serve(async (req: Request) => {
       production_costs:  result.production_costs,
       inventory_costs:   result.inventory_costs,
       marketing_costs:   result.marketing_costs,
+      catalog_costs:     result.catalog_costs,
       profit:            result.profit,
       cumulative_profit: result.cumulative_profit,
       reputation:        result.reputation,
