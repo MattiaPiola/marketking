@@ -23,9 +23,20 @@ cp .env.example .env.local
 # Fill in VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY from your Supabase dashboard
 
 # 3. Apply database migrations
-# Run the SQL in supabase/migrations/001_initial_schema.sql via the Supabase SQL editor
-# or using the Supabase CLI:
+# Open the Supabase SQL editor for your project and run each file in order:
+#   supabase/migrations/001_initial_schema.sql
+#   supabase/migrations/002_turn_management.sql
+#   supabase/migrations/003_turn_phase.sql
+#   supabase/migrations/004_catalog_costs.sql
+#   supabase/migrations/005_add_admin_id_to_rooms.sql
+#
+# Alternatively, if you have the Supabase CLI linked to your project:
 #   supabase db push
+#
+# IMPORTANT: all migrations must be applied in numeric order.
+# If you skip any migration (especially 005) you may see errors such as
+# "Could not find the 'admin_id' column of 'rooms' in the schema cache"
+# when creating a room.
 
 # 4. Start the development server
 npm run dev
