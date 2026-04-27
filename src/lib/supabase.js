@@ -1,6 +1,16 @@
 import { createClient } from '@supabase/supabase-js'
 
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL?.replace(/\/$/, '')
+// Normalize the URL to its origin only, stripping any accidental path suffix
+// (e.g. if the user copied the REST URL ".../rest/v1" from the Supabase dashboard)
+const supabaseUrl = (() => {
+  const raw = import.meta.env.VITE_SUPABASE_URL
+  if (!raw) return raw
+  try {
+    return new URL(raw).origin
+  } catch {
+    return raw
+  }
+})()
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY
 
 /**
