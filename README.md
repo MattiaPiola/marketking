@@ -33,23 +33,22 @@ npm run dev
 
 ### Deployment (Netlify)
 
-Connect your repository to Netlify. The `netlify.toml` configures:
-- Build command: `npm run build`
-- Publish directory: `dist`
-- SPA redirects: all routes → `index.html`
+1. **Connect the repository** – In the [Netlify dashboard](https://app.netlify.com), click **Add new site → Import an existing project** and authorise access to this GitHub repository.
 
-Add `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` as environment variables in Netlify.
+2. **Build settings** – The `netlify.toml` already sets everything correctly:
+   - Build command: `npm run build`
+   - Publish directory: `dist`
+   - SPA redirects: all routes → `index.html`
 
-### Deployment (Vercel)
+3. **Add Supabase environment variables** – Go to **Site configuration → Environment variables** (formerly *Build & deploy → Environment*) and add:
 
-Connect your repository to [Vercel](https://vercel.com). The `vercel.json` configures SPA rewrites automatically.
+   | Variable | Where to find it |
+   |---|---|
+   | `VITE_SUPABASE_URL` | [Supabase dashboard](https://supabase.com/dashboard) → select your project → **Settings → API** → **Project URL** |
+   | `VITE_SUPABASE_ANON_KEY` | Same page → **Project API keys** → **anon / public** key |
+   | `VITE_APP_URL` | The Netlify site URL shown in **Site overview** (e.g. `https://mercatovivo.netlify.app`) |
 
-Settings to apply in the Vercel dashboard (or `vercel.json` → overrides):
-- Framework Preset: **Vite**
-- Build command: `npm run build`
-- Output directory: `dist`
-
-Add `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` as environment variables in the Vercel project settings.
+4. **Deploy** – Trigger a deploy (Netlify deploys automatically on every push to the default branch once connected).
 
 ---
 
